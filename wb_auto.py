@@ -363,6 +363,25 @@ ACCOUNT_ENV_NAMES = ("WB_ACCESS_TOKEN", "WB_ACCESS_TOKEN_2",
                      "WB_ACCESS_TOKEN_3", "WB_ACCESS_TOKEN_4")
 
 
+def load_accounts():
+    """读取待处理账号。
+
+    WB_ACCESS_TOKEN 允许用换行或逗号分隔多个 token（GitHub workflow 只注入
+    这一个变量；修改 workflow 文件需要 token 具备 workflow scope）。
+    另外仍兼容 WB_ACCESS_TOKEN_2/3/4 这类独立变量。
+    """
+    accounts = []
+    raw = os.environ.get("WB_ACCESS_TOKEN", "")
+    parts = [p.strip() for p in raw.replace(",", "\n").split() if p.strip()]
+    for i, tok in enumerate(parts):
+        accounts.append(("account%d" % (i + 1), tok))
+    for name in ACCOUNT_ENV_NAMES[1:]:
+        v = os.environ.get(name, "").strip()
+        if v:
+            accounts.append((name, v))
+    return accounts
+
+
 def process_account(token, label, endpoint):
     """单个账号：签到 + 猫猫。猫猫异常不影响签到结论。"""
     headers = {
@@ -392,7 +411,7 @@ def main():
     webhook = os.environ.get("FEISHU_WEBHOOK")
     endpoint = os.environ.get("WB_ENDPOINT") or DEFAULT_ENDPOINT
 
-    accounts = [(n, os.environ[n]) for n in ACCOUNT_ENV_NAMES if os.environ.get(n)]
+    accounts = load_accounts()
     if not accounts:
         log("缺少环境变量 WB_ACCESS_TOKEN（请运行 refresh_token.py 注入 GitHub Secret）")
         return 2
